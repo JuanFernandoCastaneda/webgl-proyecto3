@@ -81,7 +81,7 @@ function main() {
     const mWorldLoc = gl.getUniformLocation(program, "mWorld");
     gl.uniformMatrix4fv(mWorldLoc, false, mWorld);
 
-    let mView = mat4.lookAt(mat4.create(), [0, 0, 10], [0, 0, 0], [0, 1, 0]);
+    let mView = mat4.lookAt(mat4.create(), [10, 0, 0], [0, 0, 0], [0, 1, 0]);
     const mViewLoc = gl.getUniformLocation(program, "mView");
     gl.uniformMatrix4fv(mViewLoc, false, mView);
 
@@ -127,23 +127,32 @@ function main() {
     let xRotationMatrix = new Float32Array(16);
     let identityMatrix = mat4.create();
 
-    const texturasCubo1 = new Array(48);
-    for (let i = 0; i < texturasCubo1.length / 8; i++) {
-        texturasCubo1[i * 8] = 0;
-        texturasCubo1[i * 8 + 1] = 1;
+    const texturasCamisetaHombre = generateCubeTexture(0.733, 0, 0.996, 0.462);
 
-        texturasCubo1[i * 8 + 2] = 1;
-        texturasCubo1[i * 8 + 3] = 1;
+    const cubo = new Persona(new Array(48).fill(1), texturasCamisetaHombre, true);
 
-        texturasCubo1[i * 8 + 4] = 1;
-        texturasCubo1[i * 8 + 5] = 0;
+    const cielo = new Cube(generateCubeTexture(0.1, 0.602, 0.439, 0.945), new Array(48).fill(0));
+    cielo.scale(40, 40, 40);
 
-        texturasCubo1[i * 8 + 6] = 0;
-        texturasCubo1[i * 8 + 7] = 0;
+    const montaniaTextura = new Array(sphereTextureSize);
+    for(let i = 0; i < sphereTextureSize; i++) {
+        if(i % 4 == 0) {
+            montaniaTextura[i] = 0.452
+        } else if(i % 4 == 1) {
+            montaniaTextura[i] = 0.022;
+        } else if(i % 4 == 2){
+            montaniaTextura[i] = 0.664;
+        } else {
+            montaniaTextura[i] = 0.224;
+        }
     }
-    const cubo = new Persona(texturasCubo1, new Array(48).fill(0), true);
+    const montania1 = new Sphere(montaniaTextura, new Array(sphereTextureSize).fill(0), sphereQuality);
+    montania1.scale(2, 5, 2);
+    montania1.translate(0, -5, 0);
+    
 
-    //const esfera = new Sphere(new Array(sphereTextureSize).fill(0.25), new Array(sphereTextureSize).fill(0), sphereQuality);
+    let reverseLeg = false;
+    let legAngle = 0;
 
     const loop = () => {
 
@@ -152,9 +161,12 @@ function main() {
 
         // Operating the matrix to rotate in the period, by the y axis.
         // 1, 1, 0
+        
+        /*
         mat4.rotate(yRotationMatrix, identityMatrix, period, [0, 1, 0]);
         mat4.rotate(xRotationMatrix, identityMatrix, period / 10, [1, 0, 0]);
         mat4.mul(mWorld, yRotationMatrix, xRotationMatrix);
+        */
         gl.uniformMatrix4fv(mWorldLoc, false, mWorld);
 
         gl.uniform3f(ambientLightLoc, ...ambientLight);
@@ -168,9 +180,21 @@ function main() {
         // Clearing both the color and the depth.
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
+        cubo.animateRightArm(0.1);
+        cubo.animateLeftArm(-0.1);
+        
+        legAngle += 0.1;
+        if(Math.abs(legAngle) >= Math.PI/4) {
+            legAngle = 0;
+            reverseLeg = !reverseLeg;
+        }
+        cubo.animateRightLeg(reverseLeg ? -0.1 : 0.1);
+        cubo.animateLeftLeg(reverseLeg ? 0.1 : -0.1);
         cubo.paint(gl);
 
-        //esfera.paint(gl);
+        cielo.paint(gl);
+
+        montania1.paint(gl);
 
         // 1. How we are going to draw.
         // 2. Quantity of elements.
@@ -319,11 +343,11 @@ class Figure3D {
         const otherAxis1 = (1 + axis) % 3;
         const otherAxis2 = (2 + axis) % 3;
         for (let i = 0; i < this.jackArray.length / 11; i++) {
-            original = this.vertices[i * 12 + otherAxis1];
-            this.vertices[i * 11 + otherAxis1] = Math.cos(theta) * original
-                - Math.sin(theta) * this.vertices[i * 11 + otherAxis2];
-            this.vertices[i * 11 + otherAxis2] = Math.sin(theta) * original
-                + Math.cos(theta) * this.vertices[i * 11 + otherAxis2];
+            original = this.jackArray[i * 11 + otherAxis1];
+            this.jackArray[i * 11 + otherAxis1] = Math.cos(theta) * original
+                - Math.sin(theta) * this.jackArray[i * 11 + otherAxis2];
+            this.jackArray[i * 11 + otherAxis2] = Math.sin(theta) * original
+                + Math.cos(theta) * this.jackArray[i * 11 + otherAxis2];
         }
     }
 }
@@ -518,11 +542,60 @@ class ComplexFigure3D {
 
 class Persona extends ComplexFigure3D {
     constructor(shirtTexture1, shirtTexture2, hasLongHair) {
+        const emptyCubeTexture = new Array(48).fill(1)
+        const cabeza = new Cube(generateCubeTexture(0.224, 0.221, 0.224, 0.221), new Array(48).fill(1));
+        cabeza.scale(0.35, 0.2, 0.35);
+        cabeza.translate(0, 0.4, 0);
         const shirt = new Cube(shirtTexture1, shirtTexture2);
+        shirt.scale(0.5, 0.4, 0.4);
+        shirt.translate(0, 0.1, 0);
         const legTexture = generateCubeTexture(0.280, 0.372, 0.280, 0.372);
-        const firstLeg = new Cube(legTexture, new Array(48).fill(1));
-        firstLeg.translate(2, 0, 0);
-        super([shirt, firstLeg]);
+        const firstArm = new Cube(shirtTexture1, emptyCubeTexture);
+        firstArm.scale(0.15, 0.45, 0.25);
+        firstArm.translate(0.325, 0.075, 0);
+        const secondArm = new Cube(shirtTexture1, emptyCubeTexture);
+        secondArm.scale(0.15, 0.45, 0.25);
+        secondArm.translate(-0.325, 0.075, 0);
+        const firstLeg = new Cube(legTexture, emptyCubeTexture);
+        firstLeg.scale(0.25, 0.4, 0.25);
+        firstLeg.translate(-0.125, -0.3, 0);
+        const secondLeg = new Cube(legTexture, emptyCubeTexture);
+        secondLeg.scale(0.25, 0.4, 0.25);
+        secondLeg.translate(0.125, -0.3, 0);
+
+        super([cabeza, shirt, firstArm, secondArm, firstLeg, secondLeg]);
+        this.ySize = 1
+    }
+
+    scale(x, y, z) {
+        this.ySize *= y;
+        super.scale(x, y, z);
+    }
+
+    animateRightArm(angle) {
+        this.figures[2].translate(0, -0.3*this.ySize, 0);
+        this.figures[2].rotate(0, angle);
+        this.figures[2].translate(0, 0.3*this.ySize, 0);
+    }
+
+    animateLeftArm(angle) {
+        this.figures[3].translate(0, -0.3*this.ySize, 0);
+        this.figures[3].rotate(0, angle);
+        this.figures[3].translate(0, 0.3*this.ySize, 0);
+    }
+
+    animateRightLeg(angle) {
+        const moduledAngle = angle % Math.PI;
+        this.figures[4].translate(0, -0.3*this.ySize, 0);
+        this.figures[4].rotate(0, moduledAngle);
+        this.figures[4].translate(0, 0.3*this.ySize, 0);
+    }
+
+    animateLeftLeg(angle) {
+        const moduledAngle = angle % Math.PI;
+        this.figures[5].translate(0, -0.3*this.ySize, 0);
+        this.figures[5].rotate(0, moduledAngle);
+        this.figures[5].translate(0, 0.3*this.ySize, 0);
     }
 }
 
