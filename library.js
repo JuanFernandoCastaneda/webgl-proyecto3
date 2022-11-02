@@ -25,11 +25,13 @@ attribute vec2 vertTexture2;
 varying vec3 fragNormal;
 varying vec2 fragTexture;
 varying vec2 fragTexture2;
+varying vec3 posicion;
 
 void main() {
     fragTexture = vertTexture;
     fragTexture2 = vertTexture2;
     fragNormal = (mWorld * vec4(vertNormal, 0.0)).xyz;
+    posicion = (vertPosition).xyz;
     gl_Position = mProjection * mView * mWorld * vertPosition;
 }
 `;
@@ -43,8 +45,13 @@ precision mediump float;
 varying vec3 fragNormal;
 varying vec2 fragTexture;
 varying vec2 fragTexture2;
+varying vec3 posicion;
 
 uniform sampler2D sampler;
+
+uniform mat4 mWorld;
+uniform mat4 mView;
+uniform mat4 mProjection;
 
 uniform vec3 ambientLight;
 uniform vec3 sunLight;
@@ -57,8 +64,8 @@ void main() {
     vec4 texel2 = texture2D(sampler, fragTexture2);
 
     vec3 light = ambientLight 
-        + sunLight * max(dot(fragNormal, normalize(sunDirection)), 0.0)
-        + torchLight * max(dot(fragNormal, normalize(sunDirection)), 0.0);
+        + sunLight * max(dot(fragNormal, normalize((vec4(sunDirection, 0.0)*mWorld*mProjection).xyz - posicion)), 0.0)
+        + vec3(0, 0, 0) * torchLight * max(dot(fragNormal, normalize(sunDirection - posicion)), 0.0);
 
     gl_FragColor = vec4((texel.rgb + texel2.rgb) * light, texel.a + texel2.a);
 
@@ -70,11 +77,12 @@ const gl = canvas.getContext("webgl");
 const mat4 = glMatrix.mat4;
 const glmat = glMatrix.glMatrix;
 
+const curva = [{"x":100,"y":25,"t":0},{"x":94.826,"y":28.835119999999996,"t":0.02},{"x":90.09599999999999,"y":32.544959999999996,"t":0.04},{"x":85.79799999999999,"y":36.136239999999994,"t":0.06},{"x":81.92000000000002,"y":39.615680000000005,"t":0.08},{"x":78.45000000000002,"y":42.99000000000001,"t":0.1},{"x":75.376,"y":46.265919999999994,"t":0.12},{"x":72.68599999999999,"y":49.450160000000004,"t":0.14},{"x":70.368,"y":52.54944,"t":0.16},{"x":68.41,"y":55.570479999999996,"t":0.18},{"x":66.80000000000003,"y":58.52000000000002,"t":0.2},{"x":65.526,"y":61.40472000000001,"t":0.22},{"x":64.57600000000001,"y":64.23136,"t":0.24},{"x":63.937999999999995,"y":67.00664,"t":0.26},{"x":63.599999999999994,"y":69.73728,"t":0.28},{"x":63.54999999999998,"y":72.42999999999999,"t":0.3},{"x":63.775999999999996,"y":75.09151999999999,"t":0.32},{"x":64.26599999999999,"y":77.72855999999999,"t":0.34},{"x":65.00800000000001,"y":80.34784,"t":0.36},{"x":65.99000000000001,"y":82.95608,"t":0.38},{"x":67.20000000000002,"y":85.56,"t":0.4},{"x":68.626,"y":88.16632,"t":0.42},{"x":70.256,"y":90.78176,"t":0.44},{"x":72.078,"y":93.41304000000001,"t":0.46},{"x":74.08,"y":96.06688,"t":0.48},{"x":76.25,"y":98.75,"t":0.5},{"x":78.576,"y":101.46912,"t":0.52},{"x":81.04599999999999,"y":104.23096,"t":0.54},{"x":83.64800000000001,"y":107.04223999999999,"t":0.56},{"x":86.37,"y":109.90968000000001,"t":0.58},{"x":89.19999999999999,"y":112.84,"t":0.6},{"x":92.126,"y":115.83992,"t":0.62},{"x":95.136,"y":118.91616,"t":0.64},{"x":98.218,"y":122.07544000000001,"t":0.66},{"x":101.36000000000001,"y":125.32448000000002,"t":0.68},{"x":104.54999999999998,"y":128.66999999999996,"t":0.7},{"x":107.776,"y":132.11872,"t":0.72},{"x":111.02599999999998,"y":135.67736,"t":0.74},{"x":114.28800000000001,"y":139.35264,"t":0.76},{"x":117.55,"y":143.15128,"t":0.78},{"x":120.80000000000001,"y":147.08,"t":0.8},{"x":124.02599999999998,"y":151.14551999999998,"t":0.82},{"x":127.21599999999998,"y":155.35456,"t":0.84},{"x":130.358,"y":159.71384,"t":0.86},{"x":133.44,"y":164.23008,"t":0.88},{"x":136.45000000000002,"y":168.91000000000003,"t":0.9},{"x":139.376,"y":173.76032,"t":0.92},{"x":142.206,"y":178.78776,"t":0.94},{"x":144.928,"y":183.99904,"t":0.96},{"x":147.53,"y":189.40087999999997,"t":0.98},{"x":150,"y":195,"t":1}];
 const sphereQuality = 20;
 const sphereTextureSize = (sphereQuality + 1) ** 2 * 2
 
-function main() {
-
+async function main() {
+    
     const program = biolerplateGl(gl);
 
     let mWorld = mat4.create();
@@ -130,29 +138,28 @@ function main() {
     const texturasCamisetaHombre = generateCubeTexture(0.733, 0, 0.996, 0.462);
 
     const cubo = new Persona(new Array(48).fill(1), texturasCamisetaHombre, true);
+    cubo.animateLeftArm(Math.PI/2);
 
     const cielo = new Cube(generateCubeTexture(0.1, 0.602, 0.439, 0.945), new Array(48).fill(0));
     cielo.scale(40, 40, 40);
 
-    const montaniaTextura = new Array(sphereTextureSize);
-    for(let i = 0; i < sphereTextureSize; i++) {
-        if(i % 4 == 0) {
-            montaniaTextura[i] = 0.452
-        } else if(i % 4 == 1) {
-            montaniaTextura[i] = 0.022;
-        } else if(i % 4 == 2){
-            montaniaTextura[i] = 0.664;
-        } else {
-            montaniaTextura[i] = 0.224;
-        }
-    }
+    const sun = new Sphere(generateSphereTexture(0.462, 0.52, 0.822, 0.801), new Array(sphereTextureSize).fill(1), sphereQuality);
+    sun.scale(2, 2, 2);
+    sun.translate(-15, 5, -10);
+    sunDirection = [-15, 5, -10];
+    sunLight = [0.5, 0.5, 0.5];
+
+    const montaniaTextura = generateSphereTexture(0.452, 0.022, 0.664, 0.224);
+
     const montania1 = new Sphere(montaniaTextura, new Array(sphereTextureSize).fill(0), sphereQuality);
     montania1.scale(2, 5, 2);
-    montania1.translate(0, -5, 0);
+    montania1.translate(0, -5.5, 0);
     
 
     let reverseLeg = false;
     let legAngle = 0;
+
+    let contador = 0;
 
     const loop = () => {
 
@@ -161,12 +168,10 @@ function main() {
 
         // Operating the matrix to rotate in the period, by the y axis.
         // 1, 1, 0
-        
-        /*
         mat4.rotate(yRotationMatrix, identityMatrix, period, [0, 1, 0]);
-        mat4.rotate(xRotationMatrix, identityMatrix, period / 10, [1, 0, 0]);
+        mat4.rotate(xRotationMatrix, identityMatrix, period / 1000, [1, 0, 0]);
         mat4.mul(mWorld, yRotationMatrix, xRotationMatrix);
-        */
+        
         gl.uniformMatrix4fv(mWorldLoc, false, mWorld);
 
         gl.uniform3f(ambientLightLoc, ...ambientLight);
@@ -179,9 +184,6 @@ function main() {
         gl.clearColor(0.75, 0.85, 0.8, 1.0);
         // Clearing both the color and the depth.
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-        cubo.animateRightArm(0.1);
-        cubo.animateLeftArm(-0.1);
         
         legAngle += 0.1;
         if(Math.abs(legAngle) >= Math.PI/4) {
@@ -190,11 +192,24 @@ function main() {
         }
         cubo.animateRightLeg(reverseLeg ? -0.1 : 0.1);
         cubo.animateLeftLeg(reverseLeg ? 0.1 : -0.1);
+        cubo.animateRightArm(reverseLeg ? -0.1 : 0.1)
+
         cubo.paint(gl);
 
         cielo.paint(gl);
 
+
+        //sun.translate(0, (curva[contador].y)/50, (curva[contador].x)/5);
+        sun.paint(gl);
+        //sun.translate(0, -(curva[contador].y)/50, (-curva[contador].x)/5);
+
         montania1.paint(gl);
+
+        contador += 1;
+
+        if(contador >= curva.length) {
+            contador = 0;
+        }
 
         // 1. How we are going to draw.
         // 2. Quantity of elements.
@@ -308,6 +323,8 @@ class Figure3D {
             this.jackArray[i * 11 + 10] = textures2[i * 2 + 1];
         }
 
+        this.distanceFromOrigin = [0, 0, 0];
+
         this.indices = new Uint16Array(indices);
 
         this.wayOfDrawing = wayOfDrawing;
@@ -324,6 +341,11 @@ class Figure3D {
 
     translate(x, y, z) {
         for (let i = 0; i < this.jackArray.length / 11; i++) {
+            this.distanceFromOrigin = [
+                this.distanceFromOrigin[0] + x,
+                this.distanceFromOrigin[1] + y,
+                this.distanceFromOrigin[2] + z,
+            ]
             this.jackArray[i * 11] += x;
             this.jackArray[i * 11 + 1] += y;
             this.jackArray[i * 11 + 2] += z;
@@ -349,6 +371,11 @@ class Figure3D {
             this.jackArray[i * 11 + otherAxis2] = Math.sin(theta) * original
                 + Math.cos(theta) * this.jackArray[i * 11 + otherAxis2];
         }
+    }
+
+    goOrigin() {
+        this.translate(-this.distanceFromOrigin[0], -this.distanceFromOrigin[1], -this.distanceFromOrigin[2]);
+        this.distanceFromOrigin = [0, 0, 0];
     }
 }
 
@@ -461,6 +488,22 @@ function generateCubeTexture(minX, minY, maxX, maxY) {
     return texturasCubo1;
 }
 
+function generateSphereTexture(minX, minY, maxX, maxY) {
+    const montaniaTextura = new Array(sphereTextureSize);
+    for(let i = 0; i < sphereTextureSize; i++) {
+        if(i % 4 == 0) {
+            montaniaTextura[i] = minX;
+        } else if(i % 4 == 1) {
+            montaniaTextura[i] = minY;
+        } else if(i % 4 == 2){
+            montaniaTextura[i] = maxX;
+        } else {
+            montaniaTextura[i] = maxY;
+        }
+    }
+    return montaniaTextura;
+}
+
 class Sphere extends Figure3D {
     constructor(texture, texture2, SPHERE_DIV) {
         if(texture.length != (SPHERE_DIV+1) ** 2*2) throw "La primera textura de la esfera no cumple con lo esperado."
@@ -512,8 +555,6 @@ class Sphere extends Figure3D {
                 indices.push(p2 + 1);
             }
         }
-
-        console.log(vertices, indices);
         super(vertices, indices, normales, texture, texture2, gl.TRIANGLES);
     }
 }
@@ -537,6 +578,10 @@ class ComplexFigure3D {
 
     rotate(axis, theta) {
         this.figures.forEach((figure) => figure.rotate(axis, theta));
+    }
+
+    goOrigin() {
+        this.figures.forEach((figure) => figure.goOrigin());
     }
 }
 
