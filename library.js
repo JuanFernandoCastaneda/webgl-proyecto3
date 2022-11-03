@@ -64,13 +64,15 @@ void main() {
     vec4 texel2 = texture2D(sampler, fragTexture2);
 
     vec3 light = ambientLight 
-        + sunLight * max(dot(fragNormal, normalize((vec4(sunDirection, 0.0)*mWorld*mProjection).xyz - posicion)), 0.0)
-        + vec3(0, 0, 0) * torchLight * max(dot(fragNormal, normalize(sunDirection - posicion)), 0.0);
+        + sunLight * max(dot(fragNormal, normalize(sunDirection - posicion)), 0.0)
+        + vec3(0, 0, 0) * torchLight * max(dot(fragNormal, normalize(torchDirection - posicion)), 0.0);
 
     gl_FragColor = vec4((texel.rgb + texel2.rgb) * light, texel.a + texel2.a);
 
 }
 `;
+
+// (vec4(sunDirection, 0.0)*mWorld*mProjection).xyz
 
 const canvas = document.getElementById("canva");
 const gl = canvas.getContext("webgl");
@@ -88,8 +90,8 @@ async function main() {
     let mWorld = mat4.create();
     const mWorldLoc = gl.getUniformLocation(program, "mWorld");
     gl.uniformMatrix4fv(mWorldLoc, false, mWorld);
-
-    let mView = mat4.lookAt(mat4.create(), [10, 0, 0], [0, 0, 0], [0, 1, 0]);
+    // -10,0,-2
+    let mView = mat4.lookAt(mat4.create(), [-10, 0, -2], [0, 0, 0], [0, 1, 0]);
     const mViewLoc = gl.getUniformLocation(program, "mView");
     gl.uniformMatrix4fv(mViewLoc, false, mView);
 
@@ -127,7 +129,7 @@ async function main() {
     let ambientLight = [0.3, 0.3, 0.3];
     let sunLight = [0.5, 0.5, 0.5];
     let sunDirection = [10, 0, 0];
-    let torchLight = [0.2, 0.2, 0.2];
+    let torchLight = [0.55, 0.55, 0.55];
     let torchDirection = [0, 10, 0];
 
     let period = 0;
@@ -140,26 +142,37 @@ async function main() {
     const cubo = new Persona(new Array(48).fill(1), texturasCamisetaHombre, true);
     cubo.animateLeftArm(Math.PI/2);
 
-    const cielo = new Cube(generateCubeTexture(0.1, 0.602, 0.439, 0.945), new Array(48).fill(0));
+    const cielo = new Cube(generateCubeTexture(0.1, 0.602, 0.439, 0.945), new Array(48).fill(0), false);
     cielo.scale(40, 40, 40);
 
-    const sun = new Sphere(generateSphereTexture(0.462, 0.52, 0.822, 0.801), new Array(sphereTextureSize).fill(1), sphereQuality);
+    const sun = new Sphere(generateSphereTexture(0.462, 0.52, 0.822, 0.801), new Array(sphereTextureSize).fill(1), sphereQuality, true);
     sun.scale(2, 2, 2);
-    sun.translate(-15, 5, -10);
-    sunDirection = [-15, 5, -10];
+    sun.translate(16, 5, -10);
+    sunDirection = [14, 3, -8, 1];
     sunLight = [0.5, 0.5, 0.5];
 
     const montaniaTextura = generateSphereTexture(0.452, 0.022, 0.664, 0.224);
 
-    const montania1 = new Sphere(montaniaTextura, new Array(sphereTextureSize).fill(0), sphereQuality);
-    montania1.scale(2, 5, 2);
+    const montania1 = new Sphere(montaniaTextura, new Array(sphereTextureSize).fill(0), sphereQuality, true);
+    montania1.scale(5, 5, 5);    
     montania1.translate(0, -5.5, 0);
-    
+
+    const torch = new Farol([0.11, 0.149, 0.11, 0.149], [0.462, 0.52, 0.822, 0.801], false);
+    torch.scale(1, 0.3, 1);
+    torch.translate(0, 2, 0);
+
+    const farol = new Farol([0, 0, 0, 0], [0.188, 0.145, 0.188, 0.145], true);
+    farol.scale(1, 2, 1);
+    farol.rotate(0, -Math.PI/2);
+    farol.translate(-1.5, 0, 0);
+
 
     let reverseLeg = false;
     let legAngle = 0;
 
     let contador = 0;
+    let descendiente = false;
+    let farolAngle = 0;
 
     const loop = () => {
 
@@ -171,45 +184,73 @@ async function main() {
         mat4.rotate(yRotationMatrix, identityMatrix, period, [0, 1, 0]);
         mat4.rotate(xRotationMatrix, identityMatrix, period / 1000, [1, 0, 0]);
         mat4.mul(mWorld, yRotationMatrix, xRotationMatrix);
-        
-        gl.uniformMatrix4fv(mWorldLoc, false, mWorld);
-
-        gl.uniform3f(ambientLightLoc, ...ambientLight);
-        gl.uniform3f(sunLightLoc, ...sunLight);
-        gl.uniform3f(sunDirectionLoc, ...sunDirection);
-        gl.uniform3f(torchLightLoc, ...torchLight);
-        gl.uniform3f(torchDirectionLoc, ...torchDirection);
 
         // Setting up the color with which one's clears.
         gl.clearColor(0.75, 0.85, 0.8, 1.0);
         // Clearing both the color and the depth.
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
         
-        legAngle += 0.1;
+        legAngle += 0.05;
         if(Math.abs(legAngle) >= Math.PI/4) {
             legAngle = 0;
             reverseLeg = !reverseLeg;
         }
-        cubo.animateRightLeg(reverseLeg ? -0.1 : 0.1);
-        cubo.animateLeftLeg(reverseLeg ? 0.1 : -0.1);
-        cubo.animateRightArm(reverseLeg ? -0.1 : 0.1)
+        cubo.animateRightLeg(reverseLeg ? -0.05 : 0.05);
+        cubo.animateLeftLeg(reverseLeg ? 0.05 : -0.05);
+        cubo.animateRightArm(reverseLeg ? -0.05 : 0.05)
 
         cubo.paint(gl);
 
         cielo.paint(gl);
 
-
-        //sun.translate(0, (curva[contador].y)/50, (curva[contador].x)/5);
+        /*
+        sun.translate(0, 
+            descendiente ? -(curva[contador].y)/50 : (curva[contador].y)/50, 
+            descendiente ? -(curva[contador].x)/5: (curva[contador].x)/5);
+        */
         sun.paint(gl);
-        //sun.translate(0, -(curva[contador].y)/50, (-curva[contador].x)/5);
+        /*
+        sun.translate(0, 
+            descendiente ? (curva[contador].y)/50 : -(curva[contador].y)/50, 
+            descendiente ? (curva[contador].x)/5: -(curva[contador].x)/5);
+        */
 
         montania1.paint(gl);
 
-        contador += 1;
+        
+        farolAngle += 0.008;
+        // Con el z
+        
+        farol.rotate(0, 0.008);
+        farol.translate(0, Math.sin(farolAngle)*5-5, -Math.cos(farolAngle)*5-0.1);
+        farol.paint(gl);
+        farol.translate(0, -Math.sin(farolAngle)*5+5, Math.cos(farolAngle)*5+0.1);
 
-        if(contador >= curva.length) {
-            contador = 0;
+        torchDirection = [-1.5, Math.sin(farolAngle)*5-5, -Math.cos(farolAngle)*5-0.1];
+
+        //farol.rotate(0, 0.01);
+        //farol.translate(0, 3, 0);
+        //farol.translate(0, -3, 0);
+
+        //torch.paint(gl);
+        //farol.translate()
+
+        console.log(contador);
+
+        contador = descendiente ? contador - 1 : contador + 1;
+        if(contador >= curva.length-1 || contador <= 0) {
+            descendiente = !descendiente;
         }
+        
+        gl.uniformMatrix4fv(mWorldLoc, false, mWorld);
+
+        mat4.mul(sunDirection, yRotationMatrix, xRotationMatrix);
+
+        gl.uniform3f(ambientLightLoc, ...ambientLight);
+        gl.uniform3f(sunLightLoc, ...sunLight);
+        gl.uniform3f(sunDirectionLoc, ...sunDirection);
+        gl.uniform3f(torchLightLoc, ...torchLight);
+        gl.uniform3f(torchDirectionLoc, ...torchDirection);
 
         // 1. How we are going to draw.
         // 2. Quantity of elements.
@@ -299,7 +340,7 @@ class Figure3D {
     La idea es poner posiciones, normales y colores en un solo arreglo para pasar al buffer.
     Vertices son 4 coordenadas, igual que colors. Normals son 3.
     */
-    constructor(positions, indices, normals, textures, textures2, wayOfDrawing) {
+    constructor(positions, indices, normals, textures, textures2, wayOfDrawing, outwards) {
         if (positions.length % 4 != 0) throw "El arreglo de posiciones no tiene tamaño múltiplod de 4."
         if (normals.length % 3 != 0) throw "El arreglo de normales no tiene tamaño múltiplo de 3."
         if (textures.length % 2 != 0) throw "El arreglo de texturas 1 no tiene tamaño múltiplo de 2."
@@ -313,9 +354,9 @@ class Figure3D {
             this.jackArray[i * 11 + 2] = positions[i * 4 + 2];
             this.jackArray[i * 11 + 3] = positions[i * 4 + 3];
 
-            this.jackArray[i * 11 + 4] = normals[i * 3];
-            this.jackArray[i * 11 + 5] = normals[i * 3 + 1];
-            this.jackArray[i * 11 + 6] = normals[i * 3 + 2];
+            this.jackArray[i * 11 + 4] = outwards ? normals[i * 3] : -normals[i * 3];
+            this.jackArray[i * 11 + 5] = outwards ? normals[i * 3 + 1] : -normals[i * 3 + 1];
+            this.jackArray[i * 11 + 6] = outwards ? normals[i * 3 + 2] : -normals[i * 3 + 2];
 
             this.jackArray[i * 11 + 7] = textures[i * 2];
             this.jackArray[i * 11 + 8] = textures[i * 2 + 1];
@@ -381,7 +422,7 @@ class Figure3D {
 
 // Tiene 24 vértices.
 class Cube extends Figure3D {
-    constructor(textures, textures2) {
+    constructor(textures, textures2, outwards) {
         if (textures.length / 2 != 24) throw "El arreglo de texturas 1 del cubo no corresponde con la cantidad de vértices."
         if (textures2.length / 2 != 24) throw "El arreglo de texturas 2 del cubo no corresponde con la cantidad de vértices."
 
@@ -466,7 +507,7 @@ class Cube extends Figure3D {
             -0.5, 0.5, 0.5,
             -0.5, 0.5, -0.5,
         ]
-        super(vertices, indices, normals, textures, textures2, gl.TRIANGLES);
+        super(vertices, indices, normals, textures, textures2, gl.TRIANGLES, outwards);
     }
 }
 
@@ -505,7 +546,7 @@ function generateSphereTexture(minX, minY, maxX, maxY) {
 }
 
 class Sphere extends Figure3D {
-    constructor(texture, texture2, SPHERE_DIV) {
+    constructor(texture, texture2, SPHERE_DIV, outwards) {
         if(texture.length != (SPHERE_DIV+1) ** 2*2) throw "La primera textura de la esfera no cumple con lo esperado."
         if(texture2.length != (SPHERE_DIV+1) ** 2*2) throw "La segunda textura de la esfera no cumple con lo esperado."
         const vertices = [], indices = [], normales = [];
@@ -555,7 +596,7 @@ class Sphere extends Figure3D {
                 indices.push(p2 + 1);
             }
         }
-        super(vertices, indices, normales, texture, texture2, gl.TRIANGLES);
+        super(vertices, indices, normales, texture, texture2, gl.TRIANGLES, outwards);
     }
 }
 
@@ -588,23 +629,23 @@ class ComplexFigure3D {
 class Persona extends ComplexFigure3D {
     constructor(shirtTexture1, shirtTexture2, hasLongHair) {
         const emptyCubeTexture = new Array(48).fill(1)
-        const cabeza = new Cube(generateCubeTexture(0.224, 0.221, 0.224, 0.221), new Array(48).fill(1));
+        const cabeza = new Cube(generateCubeTexture(0.224, 0.221, 0.224, 0.221), new Array(48).fill(1), true);
         cabeza.scale(0.35, 0.2, 0.35);
         cabeza.translate(0, 0.4, 0);
-        const shirt = new Cube(shirtTexture1, shirtTexture2);
+        const shirt = new Cube(shirtTexture1, shirtTexture2, true);
         shirt.scale(0.5, 0.4, 0.4);
         shirt.translate(0, 0.1, 0);
         const legTexture = generateCubeTexture(0.280, 0.372, 0.280, 0.372);
-        const firstArm = new Cube(shirtTexture1, emptyCubeTexture);
+        const firstArm = new Cube(shirtTexture1, emptyCubeTexture, true);
         firstArm.scale(0.15, 0.45, 0.25);
         firstArm.translate(0.325, 0.075, 0);
-        const secondArm = new Cube(shirtTexture1, emptyCubeTexture);
+        const secondArm = new Cube(shirtTexture1, emptyCubeTexture, true);
         secondArm.scale(0.15, 0.45, 0.25);
         secondArm.translate(-0.325, 0.075, 0);
-        const firstLeg = new Cube(legTexture, emptyCubeTexture);
+        const firstLeg = new Cube(legTexture, emptyCubeTexture, true);
         firstLeg.scale(0.25, 0.4, 0.25);
         firstLeg.translate(-0.125, -0.3, 0);
-        const secondLeg = new Cube(legTexture, emptyCubeTexture);
+        const secondLeg = new Cube(legTexture, emptyCubeTexture, true);
         secondLeg.scale(0.25, 0.4, 0.25);
         secondLeg.translate(0.125, -0.3, 0);
 
@@ -641,6 +682,42 @@ class Persona extends ComplexFigure3D {
         this.figures[5].translate(0, -0.3*this.ySize, 0);
         this.figures[5].rotate(0, moduledAngle);
         this.figures[5].translate(0, 0.3*this.ySize, 0);
+    }
+}
+
+class Farol extends ComplexFigure3D {
+    constructor(baseTexture, flameTexture, grande) {
+        if(baseTexture.length != 4) throw "La textura de la base del farol ta mal"
+        if(flameTexture.length != 4) throw "La textura de la flama del farol ta mal"
+
+        const base = new Cube(generateCubeTexture(...baseTexture), new Array(48).fill(0), true);
+        const flame1 = new Cube(generateCubeTexture(...flameTexture), new Array(48).fill(0), true);
+        const flame2 = new Cube(generateCubeTexture(...flameTexture), new Array(48).fill(0), true);
+        const flame3 = new Cube(generateCubeTexture(...flameTexture), new Array(48).fill(0), true);
+        const flame4 = new Cube(generateCubeTexture(...flameTexture), new Array(48).fill(0), true);
+
+        if(grande) {
+            base.scale(0.25, 0.8, 0.25);
+            base.translate(0, -0.1, 0);
+            flame1.scale(0.4, 0.2, 0.4);
+            flame1.translate(0, 0.4, 0);
+            flame2.scale(0, 0, 0);
+            flame3.scale(0, 0, 0);
+            flame4.scale(0, 0, 0);
+        } else {
+            base.scale(0.175, 0.4, 0.175);
+            base.translate(0, -0.3, 0);
+            flame1.scale(0.4, 0.2, 0.4); // esta es la segunda desde abajo.
+            flame1.translate(0, 0.1, 0);
+            flame2.scale(0.3, 0.2, 0.3); // esta es la segunda desde arriba.
+            flame2.translate(0, 0.3, 0);
+            flame3.scale(0.2, 0.1, 0.2); // esta es la de arriba.
+            flame3.translate(0, 0.45, 0);
+            flame4.scale(0.35, 0.1, 0.35); // esta es la de abajo.
+            flame4.translate(0, -0.05, 0);
+        }
+        
+        super([base, flame1, flame2, flame3, flame4]);
     }
 }
 
